@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import * as d3 from 'd3';
+	import { rule } from '$lib/stores';
 	export let context;
 	export let id;
 	export let domain;
@@ -31,7 +32,12 @@
 			.scaleTime()
 			.domain(domain)
 			.range([margin.left, width - margin.right]);
-		const keys = ['num_docks_available', 'num_ebikes_available', 'num_bikes_available'];
+		const keys = [
+			'num_bikes_disabled',
+			'num_ebikes_available',
+			'num_bikes_available',
+			'num_docks_available'
+		];
 		const series = d3.stack().order(d3.stackOrderNone).offset(d3.stackOffsetExpand).keys(keys)(
 			// distinct series keys, in input order
 			data
@@ -56,10 +62,11 @@
 		let svg = d3
 			.select(el)
 			.append('svg')
+			.attr('class', 'chart')
 			.attr('viewBox', [0, 0, width, height])
 			.attr('width', width)
 			.attr('height', height);
-		const color = d3.scaleOrdinal().domain(keys).range(['#4CF6C3', '#0068FF', '#555']);
+		const color = d3.scaleOrdinal().domain(keys).range(['#FF423D', '#4CF6C3', '#0068FF', '#555']);
 
 		svg
 			.append('g')
@@ -73,13 +80,37 @@
 			.append('title')
 			.text((d) => d.key);
 
+		const tooltip = svg.append('g');
+		tooltip.append('rect').attr('width', 2).attr('height', height).attr('fill', '#FF433D');
+		tooltip.append('text').attr('transform', `translate(10, 20)`).attr('fill', '#fff');
+
 		svg.on('mousemove', function (e) {
+			document.querySelectorAll('svg.chart').forEach((el) => {
+				if (el !== e.target) {
+				}
+				//	el.dispatchEvent(new MouseEvent('mousemove', e));
+				//}
+			});
 			const [x, y] = d3.pointer(e, svg.node());
 			const index = xScale.invert(x);
-			console.log(x, index);
-			const dIndex = data.findIndex((d) => d.times > index);
+			rule.set([x, index]);
 		});
-		//00E893
+		svg.on('mouseout', () => {
+			rule.set(null);
+		});
+
+		rule.subscribe((ruleValue) => {
+			if (ruleValue) {
+				const [x, date] = ruleValue;
+				const d = data.find((row) => row.times > date);
+				tooltip.attr('transform', `translate(${x}, 0)`);
+				tooltip
+					.select('text')
+					.text(
+						`${d.num_bikes_available} bikes\n${d.num_ebikes_available} ebikes, ${d.num_docks_available} docks, ${d.num_bikes_disabled} disabled`
+					);
+			}
+		});
 	});
 </script>
 
@@ -87,6 +118,7 @@
 <div class="row">
 	<div class="info">
 		<h3>{my_information.name}</h3>
+		<div>capacity: {my_information.capacity}</div>
 	</div>
 	<div bind:this={el} class="chart" />
 </div>
@@ -95,9 +127,9 @@
 	h3 {
 		margin: 0;
 		padding: 0;
-		font-size: 12px;
 	}
 	.info {
+		font-size: 12px;
 		padding: 10px;
 		background: #333;
 	}
@@ -105,8 +137,8 @@
 		line-height: 1;
 		display: grid;
 		grid-template-columns: 150px 1fr;
-		border-top: 10px solid black;
-		border-bottom: 10px solid black;
+		border-top: 5px solid black;
+		border-bottom: 5px solid black;
 	}
 	.chart {
 		background: #333;

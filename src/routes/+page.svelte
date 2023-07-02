@@ -6,7 +6,8 @@
 	import duckdb_wasm_eh from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 	import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 	import StationRow from '../lib/station_row.svelte';
-	import Axis from '../lib/axis.svelte';
+	import Axis from '$lib/axis.svelte';
+	import { rule } from '$lib/stores';
 
 	export const ssr = false;
 
@@ -33,7 +34,26 @@
 		const res = await fetch('./data.parquet');
 		await db.registerFileBuffer('station_status.parquet', new Uint8Array(await res.arrayBuffer()));
 
+		const info = await fetch('./station_information_array.json').then((r) => r.json());
+		const id_legend = await fetch('./id_map.json').then((r) => r.json());
 		const conn = await db.connect();
+
+		console.log(
+			await conn.query(`
+		CREATE TABLE station_information(id INTEGER, name TEXT, lat DOUBLE, lon DOUBLE, station_id TEXT)`)
+		);
+
+		for (let row of info) {
+			let id = id_legend[row.station_id];
+
+			if (id === undefined) {
+				continue;
+			}
+			await conn.query(`
+			INSERT INTO station_information(id, name, lat, lon, station_id)
+			VALUES (${id}, '${row.name.replace(/'/g, `''`)}', ${row.lat}, ${row.lon}, '${row.station_id}')
+			`);
+		}
 
 		return conn;
 	}
@@ -47,13 +67,33 @@
 
 		const station_information = await fetch('./station_information.json').then((r) => r.json());
 
+		const bbox = [-74.019924, 40.669, -74.002422, 40.680141];
+
+		/*
 		const station_ids = (
 			await conn.query(
-				`SELECT DISTINCT station_ids FROM "station_status.parquet" WHERE station_ids < 10;`
+				`SELECT DISTINCT station_ids FROM "station_status.parquet" WHERE station_ids IN
+				
+				(SELECT id FROM station_information
+		WHERE lon > ${bbox[0]} AND lon < ${bbox[2]}
+		AND lat > ${bbox[1]} AND lat < ${bbox[3]});`
 			)
 		)
 			.toArray()
 			.map((row) => row.station_ids);
+			*/
+
+		const station_ids = (
+			await conn.query(
+				`SELECT DISTINCT station_ids, MEAN(num_ebikes_available / (num_ebikes_available + num_bikes_available)) d FROM "station_status.parquet"
+				GROUP BY station_ids
+				ORDER BY d DESC
+				 LIMIT 20;`
+			)
+		)
+			.toArray()
+			.map((row) => row.station_ids);
+
 		let domain = (
 			await conn.query(
 				`SELECT MIN(times) min, MAX(times) as max FROM "station_status.parquet" WHERE station_ids < 100;`
@@ -70,25 +110,33 @@
 </script>
 
 {#await data then { station_ids, domain: xDomain, id_legend, station_information }}
-	<div class="header">
+	<div class="container">
 		<div class="actionbox">
-			<svg width="40" height="40">
-				<circle r="20" cx="20" cy="20" fill="#555" />
+			<svg width="10" height="10">
+				<circle r="5" cx="5" cy="5" fill="#555" />
 			</svg>
 		</div>
 
-		<Axis domain={xDomain} />
+		<div class="header">
+			<Axis domain={xDomain} />
+		</div>
 		<div class="sidebox">
 			<div class="controls">
 				<div class="legend">
 					<div>
-						<div class="legend-block" style="background: #4CF6C3; color: black;">Bikes</div>
+						<div class="legend-block" style="background: #4CF6C3; color: black;">EBikes</div>
 					</div>
 					<div>
-						<div class="legend-block" style="background: #0068FF">EBikes</div>
+						<div class="legend-block" style="background: #FF423D">Disabled</div>
+					</div>
+					<div>
+						<div class="legend-block" style="background: #0068FF">Bikes</div>
 					</div>
 					<div>
 						<div class="legend-block" style="background: #555">Docks</div>
+					</div>
+					<div>
+						<div class="legend-block" style="background: yellow; color: black;">Sun</div>
 					</div>
 				</div>
 			</div>
@@ -121,13 +169,17 @@
 		padding: 2px 4px;
 	}
 	.actionbox {
-		padding: 10px;
 	}
 	/* https://www.color-hex.com/color-palette/111776 */
-	.header {
+	.container {
 		display: grid;
 		grid-template-columns: 150px 1fr;
+		top: 0;
+		background: #000;
+	}
+	.header {
 		position: sticky;
+		line-height: 0;
 		top: 0;
 		background: #000;
 	}
