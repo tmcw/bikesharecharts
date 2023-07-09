@@ -1,13 +1,14 @@
-<script>
+<script lang="ts">
 	import { onMount } from 'svelte';
 	import * as d3 from 'd3';
 	import { rule } from '$lib/stores';
-	export let context;
+	import type duckdb from '@duckdb/duckdb-wasm';
+	export let context: duckdb.AsyncDuckDBConnection;
 	export let id;
 	export let domain;
 	export let id_legend;
 	export let station_information;
-	let el;
+	let el: HTMLDivElement;
 	let margin = { top: 0, right: 0, bottom: 0, left: 0 };
 	let height = 100;
 	let width = 1400;
@@ -28,16 +29,14 @@
 					};
 				})
 			);
-		let xScale = d3
-			.scaleTime()
-			.domain(domain)
-			.range([margin.left, width - margin.right]);
+
 		const keys = [
 			'num_bikes_disabled',
 			'num_ebikes_available',
 			'num_bikes_available',
 			'num_docks_available'
 		];
+
 		const series = d3.stack().order(d3.stackOrderNone).offset(d3.stackOffsetExpand).keys(keys)(
 			// distinct series keys, in input order
 			data
@@ -46,6 +45,7 @@
 			.scaleLinear()
 			.domain([0, 1])
 			.range([height - margin.bottom, margin.top]);
+
 		const area = d3
 			.area()
 			.curve(d3.curveStepAfter)
@@ -66,7 +66,24 @@
 			.attr('viewBox', [0, 0, width, height])
 			.attr('width', width)
 			.attr('height', height);
-		const color = d3.scaleOrdinal().domain(keys).range(['#FF423D', '#4CF6C3', '#0068FF', '#555']);
+
+		let xScale = d3
+			.scaleTime()
+			.domain(domain)
+			.range([margin.left, width - margin.right]);
+
+		let xAxis = d3.axisTop(xScale).tickSize(-height).tickSizeOuter(0);
+
+		let g = svg.append('g').attr('transform', 'translate(0, 0)');
+		g.call(xAxis);
+		g.selectAll('text').remove();
+		g.selectAll('.domain').remove();
+		g.selectAll('line').attr('stroke', '#aaa');
+
+		const color = d3
+			.scaleOrdinal()
+			.domain(keys)
+			.range(['#FF423D', '#4CF6C3', '#0068FF', 'transparent']);
 
 		svg
 			.append('g')
@@ -80,9 +97,47 @@
 			.append('title')
 			.text((d) => d.key);
 
+		svg
+			.append('text')
+			.style('font-size', '10px')
+			.attr('transform', `translate(5, 15)`)
+			.attr('fill', 'white')
+			.text(my_information.name);
+
 		const tooltip = svg.append('g');
-		tooltip.append('rect').attr('width', 2).attr('height', height).attr('fill', '#FF433D');
-		tooltip.append('text').attr('transform', `translate(10, 20)`).attr('fill', '#fff');
+		tooltip.append('rect').attr('width', 1).attr('height', height).attr('fill', '#fff');
+		const textColor = '#fff';
+		const rectColor = '#000';
+		tooltip
+			.append('rect')
+			.attr('width', 80)
+			.attr('height', 50)
+			.attr('fill', rectColor)
+			.attr('transform', 'translate(1, 12)');
+		tooltip
+			.append('text')
+			.attr('class', 'data-bikes')
+			.style('font-size', '10px')
+			.attr('transform', `translate(5, 25)`)
+			.attr('fill', textColor);
+		tooltip
+			.append('text')
+			.attr('class', 'data-ebikes')
+			.style('font-size', '10px')
+			.attr('transform', `translate(5, 35)`)
+			.attr('fill', textColor);
+		tooltip
+			.append('text')
+			.attr('class', 'data-disabled')
+			.style('font-size', '10px')
+			.attr('transform', `translate(5, 45)`)
+			.attr('fill', textColor);
+		tooltip
+			.append('text')
+			.attr('class', 'data-date')
+			.style('font-size', '10px')
+			.attr('transform', `translate(5, 55)`)
+			.attr('fill', textColor);
 
 		svg.on('mousemove', function (e) {
 			document.querySelectorAll('svg.chart').forEach((el) => {
@@ -104,11 +159,10 @@
 				const [x, date] = ruleValue;
 				const d = data.find((row) => row.times > date);
 				tooltip.attr('transform', `translate(${x}, 0)`);
-				tooltip
-					.select('text')
-					.text(
-						`${d.num_bikes_available} bikes\n${d.num_ebikes_available} ebikes, ${d.num_docks_available} docks, ${d.num_bikes_disabled} disabled`
-					);
+				tooltip.select('text.data-bikes').text(`${d.num_bikes_available} bikes`);
+				tooltip.select('text.data-ebikes').text(`${d.num_ebikes_available} ebikes`);
+				tooltip.select('text.data-disabled').text(`${d.num_bikes_disabled} disabled`);
+				tooltip.select('text.data-date').text(`${date.toLocaleTimeString()}`);
 			}
 		});
 	});
@@ -116,10 +170,6 @@
 
 <!-- markup (zero or more items) goes here -->
 <div class="row">
-	<div class="info">
-		<h3>{my_information.name}</h3>
-		<div>capacity: {my_information.capacity}</div>
-	</div>
 	<div bind:this={el} class="chart" />
 </div>
 
@@ -127,20 +177,22 @@
 	h3 {
 		margin: 0;
 		padding: 0;
+		font-size: inherit;
+		font-weight: bold;
 	}
-	.info {
-		font-size: 12px;
-		padding: 10px;
-		background: #333;
+	h4 {
+		font-size: inherit;
+		margin: 0;
+		padding: 0;
 	}
 	.row {
 		line-height: 1;
 		display: grid;
 		grid-template-columns: 150px 1fr;
-		border-top: 5px solid black;
-		border-bottom: 5px solid black;
+		border-bottom: 1px solid white;
 	}
 	.chart {
-		background: #333;
+		background: #111;
+		line-height: 0;
 	}
 </style>

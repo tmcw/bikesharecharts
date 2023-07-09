@@ -1,13 +1,11 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import * as duckdb from '@duckdb/duckdb-wasm';
 	import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 	import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
 	import duckdb_wasm_eh from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 	import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
-	import StationRow from '../lib/station_row.svelte';
+	import StationRow from '$lib/station_row.svelte';
 	import Axis from '$lib/axis.svelte';
-	import { rule } from '$lib/stores';
 
 	export const ssr = false;
 
@@ -38,9 +36,8 @@
 		const id_legend = await fetch('./id_map.json').then((r) => r.json());
 		const conn = await db.connect();
 
-		console.log(
-			await conn.query(`
-		CREATE TABLE station_information(id INTEGER, name TEXT, lat DOUBLE, lon DOUBLE, station_id TEXT)`)
+		await conn.query(
+			`CREATE TABLE station_information(id VARCHAR, name VARCHAR, lon DOUBLE, lat DOUBLE, station_id VARCHAR, capacity INTEGER)`
 		);
 
 		for (let row of info) {
@@ -50,8 +47,10 @@
 				continue;
 			}
 			await conn.query(`
-			INSERT INTO station_information(id, name, lat, lon, station_id)
-			VALUES (${id}, '${row.name.replace(/'/g, `''`)}', ${row.lat}, ${row.lon}, '${row.station_id}')
+			INSERT INTO station_information(id, name, lat, lon, station_id, capacity)
+			VALUES (${id}, '${row.name.replace(/'/g, `''`)}', ${row.lat}, ${row.lon}, '${row.station_id}', ${
+				row.capacity
+			})
 			`);
 		}
 
@@ -83,6 +82,23 @@
 			.map((row) => row.station_ids);
 			*/
 
+		const count = (await conn.query(`SELECT count(*) as count FROM "station_status.parquet";`))
+			.toArray()
+			.map((row) => row.count);
+
+		const station_ids = (
+			await conn.query(
+				`SELECT DISTINCT station_ids FROM "station_status.parquet" WHERE station_ids IN
+				
+				(SELECT id FROM station_information
+		ORDER BY capacity DESC LIMIT 10);`
+			)
+		)
+			.toArray()
+			.map((row) => row.station_ids);
+
+		/*
+
 		const station_ids = (
 			await conn.query(
 				`SELECT DISTINCT station_ids, MEAN(num_ebikes_available / (num_ebikes_available + num_bikes_available)) d FROM "station_status.parquet"
@@ -93,6 +109,7 @@
 		)
 			.toArray()
 			.map((row) => row.station_ids);
+			*/
 
 		let domain = (
 			await conn.query(
@@ -102,6 +119,7 @@
 
 		return {
 			id_legend,
+			count,
 			station_information,
 			station_ids,
 			domain: [new Date(domain.min), new Date(domain.max)]
@@ -109,7 +127,7 @@
 	});
 </script>
 
-{#await data then { station_ids, domain: xDomain, id_legend, station_information }}
+{#await data then { station_ids, domain: xDomain, id_legend, station_information, count }}
 	<div class="container">
 		<div class="actionbox">
 			<svg width="10" height="10">

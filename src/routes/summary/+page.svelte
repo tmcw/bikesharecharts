@@ -5,14 +5,13 @@
 	import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
 	import duckdb_wasm_eh from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 	import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
-	import StationRow from '$lib/station_row.svelte';
 	import Axis from '$lib/axis.svelte';
 	import * as d3 from 'd3';
 	import { rule } from '$lib/stores';
 
 	export const ssr = false;
 
-	let el;
+	let el: HTMLDivElement;
 
 	const MANUAL_BUNDLES: duckdb.DuckDBBundles = {
 		mvp: {
@@ -26,19 +25,14 @@
 	};
 
 	async function init() {
-		// Select a bundle based on browser checks
 		const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
-		// Instantiate the asynchronus version of DuckDB-wasm
 		const worker = new Worker(bundle.mainWorker!);
 		const logger = new duckdb.ConsoleLogger();
 		const db = new duckdb.AsyncDuckDB(logger, worker);
 		await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-
 		const res = await fetch('./data.parquet');
 		await db.registerFileBuffer('station_status.parquet', new Uint8Array(await res.arrayBuffer()));
-
 		const conn = await db.connect();
-
 		return conn;
 	}
 
@@ -64,7 +58,7 @@
 		const conn = await context;
 		const data = (
 			await conn.query(
-				`SELECT SUM(num_bikes_available)::integer as num_bikes_available, SUM(num_ebikes_available)::integer as num_ebikes_available, SUM(num_docks_available)::integer as num_docks_available, times FROM "station_status.parquet" GROUP BY times;`
+				`SELECT SUM(num_bikes_available)::integer as num_bikes_available, SUM(num_ebikes_available)::integer as num_ebikes_available, SUM(num_docks_available)::integer as num_docks_available, times FROM "station_status.parquet" GROUP BY times ORDER BY times;`
 			)
 		)
 			.toArray()

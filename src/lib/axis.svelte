@@ -1,9 +1,9 @@
-<script>
+<script lang="ts">
 	import { onMount } from 'svelte';
 	import * as d3 from 'd3';
 	import Suncalc from 'suncalc';
 	export let domain;
-	let el;
+	let el: HTMLDivElement;
 
 	let margin = { top: 0, right: 0, bottom: 0, left: 0 };
 	let height = 40;
@@ -21,6 +21,7 @@
 	console.log(sunTimes);
 
 	let xAxis = d3.axisTop(x).tickSize(2).tickSizeOuter(0);
+
 	onMount(() => {
 		let svg = d3
 			.select(el)
@@ -49,7 +50,6 @@
 
 <style>
 	.axis {
-		padding-left: 150px;
 		padding-right: 20px;
 		color: white;
 	}
