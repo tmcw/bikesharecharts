@@ -3,6 +3,7 @@
 	import * as d3 from 'd3';
 	import { rule } from '$lib/stores';
 	import type duckdb from '@duckdb/duckdb-wasm';
+	import { rightWidth } from '$lib/stores';
 	export let context: duckdb.AsyncDuckDBConnection;
 	export let id;
 	export let domain;
@@ -11,7 +12,6 @@
 	let el: HTMLDivElement;
 	let margin = { top: 0, right: 0, bottom: 0, left: 0 };
 	let height = 100;
-	let width = 1400;
 
 	const my_id = id_legend.get(id);
 	let my_information = station_information.data.stations.find(
@@ -59,18 +59,19 @@
 				return y(d[1]);
 			});
 
+		console.log($rightWidth);
 		let svg = d3
 			.select(el)
 			.append('svg')
 			.attr('class', 'chart')
-			.attr('viewBox', [0, 0, width, height])
-			.attr('width', width)
+			.attr('viewBox', [0, 0, $rightWidth, height])
+			.attr('width', $rightWidth)
 			.attr('height', height);
 
 		let xScale = d3
 			.scaleTime()
 			.domain(domain)
-			.range([margin.left, width - margin.right]);
+			.range([margin.left, $rightWidth - margin.right]);
 
 		let xAxis = d3.axisTop(xScale).tickSize(-height).tickSizeOuter(0);
 

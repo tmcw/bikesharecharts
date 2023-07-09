@@ -6,8 +6,12 @@
 	import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 	import StationRow from '$lib/station_row.svelte';
 	import Axis from '$lib/axis.svelte';
+	import { onMount } from 'svelte';
+	import { rightWidth } from '$lib/stores';
 
 	export const ssr = false;
+
+	let el: HTMLDivElement;
 
 	const MANUAL_BUNDLES: duckdb.DuckDBBundles = {
 		mvp: {
@@ -20,12 +24,22 @@
 		}
 	};
 
+	onMount(() => {
+		const resizeObserver = new ResizeObserver((entries) => {
+			for (const entry of entries) {
+				rightWidth.set(entry.contentRect.width);
+			}
+		});
+		console.log(el);
+		resizeObserver.observe(el);
+	});
+
 	async function init() {
 		// Select a bundle based on browser checks
 		const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
 		// Instantiate the asynchronus version of DuckDB-wasm
 		const worker = new Worker(bundle.mainWorker!);
-		const logger = new duckdb.ConsoleLogger();
+		const logger = new duckdb.ConsoleLogger(duckdb.LogLevel.ERROR);
 		const db = new duckdb.AsyncDuckDB(logger, worker);
 		await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
 
@@ -127,39 +141,41 @@
 	});
 </script>
 
-{#await data then { station_ids, domain: xDomain, id_legend, station_information, count }}
-	<div class="container">
-		<div class="actionbox">
-			<svg width="10" height="10">
-				<circle r="5" cx="5" cy="5" fill="#555" />
-			</svg>
-		</div>
+<div class="container">
+	<div class="actionbox">
+		<svg width="10" height="10">
+			<circle r="5" cx="5" cy="5" fill="#555" />
+		</svg>
+	</div>
 
-		<div class="header">
+	<div class="header">
+		{#await data then { domain: xDomain }}
 			<Axis domain={xDomain} />
-		</div>
-		<div class="sidebox">
-			<div class="controls">
-				<div class="legend">
-					<div>
-						<div class="legend-block" style="background: #4CF6C3; color: black;">EBikes</div>
-					</div>
-					<div>
-						<div class="legend-block" style="background: #FF423D">Disabled</div>
-					</div>
-					<div>
-						<div class="legend-block" style="background: #0068FF">Bikes</div>
-					</div>
-					<div>
-						<div class="legend-block" style="background: #555">Docks</div>
-					</div>
-					<div>
-						<div class="legend-block" style="background: yellow; color: black;">Sun</div>
-					</div>
+		{/await}
+	</div>
+	<div class="sidebox">
+		<div class="controls">
+			<div class="legend">
+				<div>
+					<div class="legend-block" style="background: #4CF6C3; color: black;">EBikes</div>
+				</div>
+				<div>
+					<div class="legend-block" style="background: #FF423D">Disabled</div>
+				</div>
+				<div>
+					<div class="legend-block" style="background: #0068FF">Bikes</div>
+				</div>
+				<div>
+					<div class="legend-block" style="background: #555">Docks</div>
+				</div>
+				<div>
+					<div class="legend-block" style="background: yellow; color: black;">Sun</div>
 				</div>
 			</div>
 		</div>
-		<div class="stack">
+	</div>
+	<div class="stack" bind:this={el}>
+		{#await data then { station_ids, domain: xDomain, id_legend, station_information, count }}
 			{#await context}
 				<p>loading…</p>
 			{:then context}
@@ -169,9 +185,9 @@
 			{:catch error}
 				<p style="color: red">{error.message}</p>
 			{/await}
-		</div>
+		{/await}
 	</div>
-{/await}
+</div>
 
 <style>
 	.legend {
@@ -185,8 +201,6 @@
 		font-size: 12px;
 		border-bottom: 1px solid #fff;
 		padding: 2px 4px;
-	}
-	.actionbox {
 	}
 	/* https://www.color-hex.com/color-palette/111776 */
 	.container {

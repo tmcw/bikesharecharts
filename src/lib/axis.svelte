@@ -2,16 +2,16 @@
 	import { onMount } from 'svelte';
 	import * as d3 from 'd3';
 	import Suncalc from 'suncalc';
+	import { rightWidth } from './stores';
 	export let domain;
 	let el: HTMLDivElement;
 
 	let margin = { top: 0, right: 0, bottom: 0, left: 0 };
 	let height = 40;
-	let width = 1400;
 	let x = d3
 		.scaleTime()
 		.domain(domain)
-		.range([margin.left, width - margin.right]);
+		.range([margin.left, $rightWidth - margin.right]);
 	const days = d3.timeDay.range(domain[0], d3.timeDay.offset(domain[1], 1));
 
 	const sunTimes = days.map((d) => {
@@ -26,8 +26,8 @@
 		let svg = d3
 			.select(el)
 			.append('svg')
-			.attr('viewBox', [0, 0, width, height])
-			.attr('width', width)
+			.attr('viewBox', [0, 0, $rightWidth, height])
+			.attr('width', $rightWidth)
 			.attr('height', height);
 		let g = svg.append('g').attr('transform', 'translate(0, 19)');
 		g.call(xAxis);
