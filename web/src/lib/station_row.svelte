@@ -4,21 +4,45 @@
 	import { rule } from '$lib/stores';
 	import type duckdb from '@duckdb/duckdb-wasm';
 	import { rightWidth } from '$lib/stores';
+
 	export let context: duckdb.AsyncDuckDBConnection;
-	export let id;
-	export let domain;
+	export let id: string;
+	export let domain: [Date, Date];
 	export let id_legend;
 	export let station_information;
+
 	let el: HTMLDivElement;
 	let margin = { top: 0, right: 0, bottom: 0, left: 0 };
 	let height = 100;
+	let intersecting = false;
+	let rendered = false;
 
 	const my_id = id_legend.get(id);
 	let my_information = station_information.data.stations.find(
 		(station) => station.station_id == my_id
 	);
 
-	onMount(async () => {
+	onMount(() => {
+		const observer = new IntersectionObserver((entries) => {
+			intersecting = entries[0].isIntersecting;
+			if (intersecting) {
+				if (rendered === false) {
+					rendered = true;
+					render();
+				}
+			} else {
+				if (rendered === true) {
+					rendered = false;
+					el.innerHTML = '';
+				}
+			}
+		});
+
+		observer.observe(el);
+		return () => observer.unobserve(el);
+	});
+
+	const render = async () => {
 		let data = await context
 			.query(`SELECT * FROM "station_status.parquet" WHERE station_ids = ${id};`)
 			.then((r) =>
@@ -155,6 +179,7 @@
 				tooltip.attr('opacity', 1);
 				let [x, date] = ruleValue;
 				const d = data.find((row) => row.times > date);
+				if (!d) return;
 				if (x > $rightWidth - tooltipWidth) {
 					tooltipInfo.attr('transform', `translate(${-tooltipWidth - 1}, 0)`);
 				} else {
@@ -167,28 +192,19 @@
 				tooltip.select('text.data-date').text(`${date.toLocaleTimeString()}`);
 			}
 		});
-	});
+		return svg;
+	};
 </script>
 
 <!-- markup (zero or more items) goes here -->
-<div class="row">
+<div class="row" id="station-{my_id}">
 	<div bind:this={el} class="chart" />
 </div>
 
 <style>
-	h3 {
-		margin: 0;
-		padding: 0;
-		font-size: inherit;
-		font-weight: bold;
-	}
-	h4 {
-		font-size: inherit;
-		margin: 0;
-		padding: 0;
-	}
 	.row {
 		line-height: 1;
+		height: 100px;
 		display: grid;
 		grid-template-columns: 150px 1fr;
 		border-bottom: 1px solid white;
