@@ -43,7 +43,7 @@
 		const db = new duckdb.AsyncDuckDB(logger, worker);
 		await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
 
-		const res = await fetch('./data.parquet');
+		const res = await fetch('https://data.bikesharecharts.com/data.parquet');
 		await db.registerFileBuffer('station_status.parquet', new Uint8Array(await res.arrayBuffer()));
 
 		const info = await fetch('./station_information_array.json').then((r) => r.json());
