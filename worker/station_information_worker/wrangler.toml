@@ -1,0 +1,12 @@
+name = "station_information_scraper"
+main = "src/index.ts"
+compatibility_date = "2023-06-29"
+
+[[r2_buckets]]
+binding = "DATA"
+bucket_name = "citibike-data-1"
+preview_bucket_name = "citibike-data-1-test"
+
+[triggers]
+crons = [ "0 0 * * *" ]
+
