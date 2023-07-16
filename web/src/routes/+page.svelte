@@ -8,6 +8,7 @@
 	import Axis from '$lib/axis.svelte';
 	import { onMount } from 'svelte';
 	import { rightWidth } from '$lib/stores';
+	import { ExternalLink } from 'lucide-svelte';
 
 	export const ssr = false;
 
@@ -171,10 +172,16 @@
 					<div class="legend-block" style="background: yellow; color: black;">Sun</div>
 				</div>
 			</div>
+			<div class="sidebar-links">
+				<a href="https://github.com/tmcw/bikesharecharts" target="_blank" rel="noopener noreferrer"
+					>GitHub
+					<ExternalLink style="width:10px;vertical-align: middle;" />
+				</a>
+			</div>
 		</div>
 	</div>
 	<div class="stack" bind:this={el}>
-		{#await data then { station_ids, domain: xDomain, id_legend, station_information, count }}
+		{#await data then { station_ids, domain: xDomain, id_legend, station_information }}
 			{#await context}
 				<p>loading…</p>
 			{:then context}
@@ -189,6 +196,17 @@
 </div>
 
 <style>
+	.sidebar-links {
+		padding: 10px 20px;
+		font-size: 12px;
+	}
+	.sidebar-links a {
+		color: #fff;
+		text-decoration: none;
+	}
+	.sidebar-links a:hover {
+		text-decoration: underline;
+	}
 	.legend {
 		padding: 20px;
 	}
