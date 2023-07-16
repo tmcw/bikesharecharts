@@ -1,0 +1,4 @@
+dev:
+  yarn dev --open
+deploy:
+  wrangler publish
