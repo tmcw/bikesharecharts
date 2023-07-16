@@ -104,8 +104,7 @@
 			await conn.query(
 				`SELECT DISTINCT station_ids FROM "station_status.parquet" WHERE station_ids IN
 				
-				(SELECT id FROM station_information
-		ORDER BY capacity DESC LIMIT 10);`
+				(SELECT id FROM station_information ORDER by capacity  DESC LIMIT 10);`
 			)
 		)
 			.toArray()

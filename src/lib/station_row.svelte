@@ -59,7 +59,6 @@
 				return y(d[1]);
 			});
 
-		console.log($rightWidth);
 		let svg = d3
 			.select(el)
 			.append('svg')
@@ -105,35 +104,37 @@
 			.attr('fill', 'white')
 			.text(my_information.name);
 
-		const tooltip = svg.append('g');
+		const tooltip = svg.append('g').attr('opacity', 0);
 		tooltip.append('rect').attr('width', 1).attr('height', height).attr('fill', '#fff');
 		const textColor = '#fff';
 		const rectColor = '#000';
-		tooltip
+		const tooltipWidth = 80;
+		const tooltipInfo = tooltip.append('g');
+		tooltipInfo
 			.append('rect')
-			.attr('width', 80)
+			.attr('width', tooltipWidth)
 			.attr('height', 50)
 			.attr('fill', rectColor)
 			.attr('transform', 'translate(1, 12)');
-		tooltip
+		tooltipInfo
 			.append('text')
 			.attr('class', 'data-bikes')
 			.style('font-size', '10px')
 			.attr('transform', `translate(5, 25)`)
 			.attr('fill', textColor);
-		tooltip
+		tooltipInfo
 			.append('text')
 			.attr('class', 'data-ebikes')
 			.style('font-size', '10px')
 			.attr('transform', `translate(5, 35)`)
 			.attr('fill', textColor);
-		tooltip
+		tooltipInfo
 			.append('text')
 			.attr('class', 'data-disabled')
 			.style('font-size', '10px')
 			.attr('transform', `translate(5, 45)`)
 			.attr('fill', textColor);
-		tooltip
+		tooltipInfo
 			.append('text')
 			.attr('class', 'data-date')
 			.style('font-size', '10px')
@@ -141,12 +142,6 @@
 			.attr('fill', textColor);
 
 		svg.on('mousemove', function (e) {
-			document.querySelectorAll('svg.chart').forEach((el) => {
-				if (el !== e.target) {
-				}
-				//	el.dispatchEvent(new MouseEvent('mousemove', e));
-				//}
-			});
 			const [x, y] = d3.pointer(e, svg.node());
 			const index = xScale.invert(x);
 			rule.set([x, index]);
@@ -157,8 +152,14 @@
 
 		rule.subscribe((ruleValue) => {
 			if (ruleValue) {
-				const [x, date] = ruleValue;
+				tooltip.attr('opacity', 1);
+				let [x, date] = ruleValue;
 				const d = data.find((row) => row.times > date);
+				if (x > $rightWidth - tooltipWidth) {
+					tooltipInfo.attr('transform', `translate(${-tooltipWidth - 1}, 0)`);
+				} else {
+					tooltipInfo.attr('transform', `translate(0, 0)`);
+				}
 				tooltip.attr('transform', `translate(${x}, 0)`);
 				tooltip.select('text.data-bikes').text(`${d.num_bikes_available} bikes`);
 				tooltip.select('text.data-ebikes').text(`${d.num_ebikes_available} ebikes`);

@@ -1,0 +1,14 @@
+name = "bikesharecharts_web"
+account_id = "d3943f9219e68c0c57fa6107894ed872"
+
+main = "./.cloudflare/worker.js"
+site.bucket = "./.cloudflare/public"
+
+build.command = "npm run build"
+
+compatibility_date = "2023-06-29"
+workers_dev = true
+
+routes = [
+  { pattern = "bikesharecharts.com", custom_domain = true }
+]

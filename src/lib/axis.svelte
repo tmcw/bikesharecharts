@@ -18,8 +18,6 @@
 		return Suncalc.getTimes(d, 40.7128, -74.006);
 	});
 
-	console.log(sunTimes);
-
 	let xAxis = d3.axisTop(x).tickSize(2).tickSizeOuter(0);
 
 	onMount(() => {
