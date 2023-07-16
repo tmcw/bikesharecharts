@@ -1,0 +1,5 @@
+station_status
+target
+.DS_Store
+*.parquet
+*.duckdb
