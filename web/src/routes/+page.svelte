@@ -8,6 +8,15 @@
 
 	let el: HTMLDivElement;
 
+	export let sort: keyof typeof sorts = 'largest';
+
+	const sorts = {
+		largest: 'ORDER BY capacity DESC',
+		smallest: 'ORDER BY capacity ASC',
+		longitude: 'ORDER BY lon ASC',
+		latitude: 'ORDER BY lat ASC'
+	} as const;
+
 	onMount(() => {
 		const resizeObserver = new ResizeObserver((entries) => {
 			for (const entry of entries) {
@@ -44,7 +53,7 @@
 
 	let context = init();
 
-	let data = context.then(async (conn) => {
+	$: data = context.then(async (conn) => {
 		const id_legend_raw = await fetch('./id_map.json').then((r) => r.json());
 
 		const id_legend = new Map(Object.entries(id_legend_raw).map(([k, v]) => [v, k]));
@@ -55,10 +64,12 @@
 			.toArray()
 			.map((row) => row.count);
 
+		console.log(sort);
+
 		const station_ids = (
 			await conn.query(
-				`SELECT DISTINCT station_ids FROM "station_status.parquet" WHERE station_ids IN
-				(SELECT id FROM station_information ORDER by capacity DESC);`
+				`SELECT DISTINCT station_ids FROM station_information 
+          JOIN "station_status.parquet" ON station_ids = id ${sorts[sort]};`
 			)
 		)
 			.toArray()
@@ -75,7 +86,7 @@
 			count,
 			station_information,
 			station_ids,
-			domain: [new Date(domain.min), new Date(domain.max)]
+			domain: [new Date(domain.min), new Date(domain.max)] as [Date, Date]
 		};
 	});
 </script>
@@ -90,11 +101,17 @@
 					<ExternalLink style="width:10px;vertical-align: middle;" />
 				</a>
 				{#await data then { station_information }}
+					<select bind:value={sort}>
+						<option value="largest">Largest</option>
+						<option value="smallest">Smallest</option>
+						<option value="longitude">Longitude</option>
+						<option value="latitude">Latitude</option>
+					</select>
 					<input
+						placeholder="Station search"
 						list="station-search-list"
 						on:change={(event) => {
 							const target = document.querySelector(`#station-${event.target.value}`);
-							console.log(target);
 							if (target) {
 								target.scrollIntoView({
 									block: 'center'
@@ -196,6 +213,9 @@
 		position: sticky;
 		top: 0;
 		background: #000;
+	}
+	select {
+		padding: 2px 0;
 	}
 	:global(body) {
 		color: white;

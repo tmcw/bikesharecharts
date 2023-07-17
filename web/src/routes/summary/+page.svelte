@@ -174,9 +174,6 @@
 		</div>
 	</div>
 	<div class="row">
-		<div class="info">
-			<h3>Totals</h3>
-		</div>
 		<div bind:this={el} class="chart" />
 	</div>
 </div>
