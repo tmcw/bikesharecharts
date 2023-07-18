@@ -1,5 +1,5 @@
 <script lang="ts">
-	import StationRow from '$lib/station_row.svelte';
+	import StationRowWrapper from '$lib/station_row_wrapper.svelte';
 	import { getDuck } from '$lib/duckdb';
 	import Axis from '$lib/axis.svelte';
 	import { onMount } from 'svelte';
@@ -63,8 +63,6 @@
 		const count = (await conn.query(`SELECT count(*) as count FROM "station_status.parquet";`))
 			.toArray()
 			.map((row) => row.count);
-
-		console.log(sort);
 
 		const station_ids = (
 			await conn.query(
@@ -162,7 +160,7 @@
 				<p>loading…</p>
 			{:then context}
 				{#each station_ids as id}
-					<StationRow domain={xDomain} {id_legend} {station_information} {context} {id} />
+					<StationRowWrapper domain={xDomain} {id_legend} {station_information} {context} {id} />
 				{/each}
 			{:catch error}
 				<p style="color: red">{error.message}</p>

@@ -11,37 +11,65 @@
 	export let id_legend;
 	export let station_information;
 
-	let el: HTMLDivElement;
+	let el: SVGSVGElement;
 	let margin = { top: 0, right: 0, bottom: 0, left: 0 };
 	let height = 100;
-	let intersecting = false;
-	let rendered = false;
+	let tooltipWidth = 150;
+	let rectColor = '#000';
+	let textColor = '#fff';
 
 	const my_id = id_legend.get(id);
 	let my_information = station_information.data.stations.find(
 		(station) => station.station_id == my_id
 	);
 
-	onMount(() => {
-		const observer = new IntersectionObserver((entries) => {
-			intersecting = entries[0].isIntersecting;
-			if (intersecting) {
-				if (rendered === false) {
-					rendered = true;
-					render();
-				}
-			} else {
-				if (rendered === true) {
-					rendered = false;
-					el.innerHTML = '';
-				}
-			}
+	const keys = [
+		'num_bikes_disabled',
+		'num_ebikes_available',
+		'num_bikes_available',
+		'num_docks_available'
+	];
+
+	let data = context
+		.query(`SELECT * FROM "station_status.parquet" WHERE station_ids = ${id};`)
+		.then((r) =>
+			r.toArray().map((r) => {
+				return {
+					...r,
+					times: new Date(r.times)
+				};
+			})
+		);
+
+	const color = d3
+		.scaleOrdinal()
+		.domain(keys)
+		.range(['#FF423D', '#4CF6C3', '#0068FF', 'transparent']);
+
+	let xScale = d3
+		.scaleTime()
+		.domain(domain)
+		.range([margin.left, $rightWidth - margin.right]);
+
+	let y = d3
+		.scaleLinear()
+		.domain([0, 1])
+		.range([height - margin.bottom, margin.top]);
+
+	const area = d3
+		.area()
+		.curve(d3.curveStepAfter)
+		.x((d) => {
+			return xScale(d.data.times);
+		})
+		.y0((d) => {
+			return y(d[0]);
+		})
+		.y1((d) => {
+			return y(d[1]);
 		});
 
-		observer.observe(el);
-		return () => observer.unobserve(el);
-	});
-
+	/*
 	const render = async () => {
 		let data = await context
 			.query(`SELECT * FROM "station_status.parquet" WHERE station_ids = ${id};`)
@@ -54,47 +82,13 @@
 				})
 			);
 
-		const keys = [
-			'num_bikes_disabled',
-			'num_ebikes_available',
-			'num_bikes_available',
-			'num_docks_available'
-		];
-
 		const series = d3.stack().order(d3.stackOrderNone).offset(d3.stackOffsetExpand).keys(keys)(
 			// distinct series keys, in input order
 			data
 		);
-		let y = d3
-			.scaleLinear()
-			.domain([0, 1])
-			.range([height - margin.bottom, margin.top]);
+	
+		let svg = d3.select(el);
 
-		const area = d3
-			.area()
-			.curve(d3.curveStepAfter)
-			.x((d) => {
-				return xScale(d.data.times);
-			})
-			.y0((d) => {
-				return y(d[0]);
-			})
-			.y1((d) => {
-				return y(d[1]);
-			});
-
-		let svg = d3
-			.select(el)
-			.append('svg')
-			.attr('class', 'chart')
-			.attr('viewBox', [0, 0, $rightWidth, height])
-			.attr('width', $rightWidth)
-			.attr('height', height);
-
-		let xScale = d3
-			.scaleTime()
-			.domain(domain)
-			.range([margin.left, $rightWidth - margin.right]);
 
 		let xAxis = d3.axisTop(xScale).tickSize(-height).tickSizeOuter(0);
 
@@ -104,66 +98,8 @@
 		g.selectAll('.domain').remove();
 		g.selectAll('line').attr('stroke', '#aaa');
 
-		const color = d3
-			.scaleOrdinal()
-			.domain(keys)
-			.range(['#FF423D', '#4CF6C3', '#0068FF', 'transparent']);
 
-		svg
-			.append('g')
-			.selectAll()
-			.data(series)
-			.join('path')
-			.attr('fill', (d) => color(d.key))
-			.attr('d', (d) => {
-				return area(d);
-			})
-			.append('title')
-			.text((d) => d.key);
 
-		svg
-			.append('text')
-			.style('font-size', '10px')
-			.attr('transform', `translate(5, 15)`)
-			.attr('fill', 'white')
-			.text(my_information.name);
-
-		const tooltip = svg.append('g').attr('opacity', 0);
-		tooltip.append('rect').attr('width', 1).attr('height', height).attr('fill', '#fff');
-		const textColor = '#fff';
-		const rectColor = '#000';
-		const tooltipWidth = 80;
-		const tooltipInfo = tooltip.append('g');
-		tooltipInfo
-			.append('rect')
-			.attr('width', tooltipWidth)
-			.attr('height', 50)
-			.attr('fill', rectColor)
-			.attr('transform', 'translate(1, 12)');
-		tooltipInfo
-			.append('text')
-			.attr('class', 'data-bikes')
-			.style('font-size', '10px')
-			.attr('transform', `translate(5, 25)`)
-			.attr('fill', textColor);
-		tooltipInfo
-			.append('text')
-			.attr('class', 'data-ebikes')
-			.style('font-size', '10px')
-			.attr('transform', `translate(5, 35)`)
-			.attr('fill', textColor);
-		tooltipInfo
-			.append('text')
-			.attr('class', 'data-disabled')
-			.style('font-size', '10px')
-			.attr('transform', `translate(5, 45)`)
-			.attr('fill', textColor);
-		tooltipInfo
-			.append('text')
-			.attr('class', 'data-date')
-			.style('font-size', '10px')
-			.attr('transform', `translate(5, 55)`)
-			.attr('fill', textColor);
 
 		svg.on('mousemove', function (e) {
 			const [x, y] = d3.pointer(e, svg.node());
@@ -194,11 +130,53 @@
 		});
 		return svg;
 	};
+  */
+	$: datum = {
+		if(ruleValue) {
+			let [x, date] = ruleValue;
+			const d = data.find((row) => row.times > date);
+			if (!d) return;
+			if (x > $rightWidth - tooltipWidth) {
+				tooltipInfo.attr('transform', `translate(${-tooltipWidth - 1}, 0)`);
+			} else {
+				tooltipInfo.attr('transform', `translate(0, 0)`);
+			}
+			return d;
+		}
+	};
 </script>
 
 <!-- markup (zero or more items) goes here -->
 <div class="row" id="station-{my_id}">
-	<div bind:this={el} class="chart" />
+	<svg
+		bind:this={el}
+		class="chart"
+		viewBox={`${[0, 0, $rightWidth, height]}`}
+		width={$rightWidth}
+		{height}
+	>
+		<text style="font-size: 10px;" transform="translate(5, 15)" fill="white">
+			{my_information.name}
+		</text>
+		{#await data then d}
+			{#each d3
+				.stack()
+				.order(d3.stackOrderNone)
+				.offset(d3.stackOffsetExpand)
+				.keys(keys)(d) as group}
+				<path fill={color(group.key)} d={area(group)}>
+					<title>{d.key}</title>
+				</path>
+			{/each}
+		{/await}
+
+		<g>
+			<rect width="1" {height} fill="#fff" />
+			<rect width={tooltipWidth} height="50" fill={rectColor} transform="translate(1, 12)" />
+			<text style="font-size: 10px" transform="translate(5, 35)" fill={textColor} />
+			<text style="font-size: 10px" transform="translate(5, 35)" fill={textColor} />
+		</g>
+	</svg>
 </div>
 
 <style>
