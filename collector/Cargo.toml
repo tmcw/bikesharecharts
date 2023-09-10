@@ -7,16 +7,17 @@ edition = "2021"
 
 [dependencies]
 flate2 = "1.0.26"
-parquet = "42.0.0"
+parquet = "46.0.0"
 tokio = { version = "1.29.0", features = ["full"] }
-arrow-array = "42.0.0"
+arrow-array = "46.0.0"
 bytes = "1.4.0"
 serde = { version = "*", features = ["derive"] }
 reqwest = { version = "0.11", features = ["json"] }
 serde_json = "1.0"
 chrono = { version = "0.4" }
-arrow = "42.0.0"
+arrow = "46.0.0"
 glob = "0.3.1"
+indicatif = "0.17.6"
 
 [dependencies.duckdb]
 version = "0.8.1"

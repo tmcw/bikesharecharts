@@ -2,22 +2,24 @@ use arrow::compute::sort;
 use arrow::datatypes::{DataType, Field, Schema, TimeUnit};
 
 use arrow_array::builder::PrimitiveBuilder;
-use arrow_array::types::{GenericStringType, TimestampMillisecondType, UInt16Type, UInt64Type};
+use arrow_array::types::{Int32Type, TimestampSecondType};
 use arrow_array::{ArrayRef, RecordBatch};
 use chrono::{NaiveDateTime, Timelike};
-// use duckdb::{params, Connection};
-// use duckdb::Connection;
 use flate2::bufread;
-use glob::glob;
+use glob::{glob, GlobError};
 use parquet::arrow::ArrowWriter;
 use parquet::file::properties::WriterProperties;
 
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
+use indicatif::ProgressBar;
 use std::fs::{self, File};
 use std::io::{BufReader, Write};
 use std::sync::Arc;
+
+type IntyBaseType = i32;
 
 #[derive(Debug, Deserialize)]
 struct Station {
@@ -25,19 +27,19 @@ struct Station {
     legacy_id: String,
     #[serde(skip)]
     last_reported: u64,
-    num_ebikes_available: u16,
-    num_bikes_available: u16,
+    num_ebikes_available: IntyBaseType,
+    num_bikes_available: IntyBaseType,
     is_returning: u32,
     #[serde(skip)]
     eightd_has_available_keys: bool,
-    num_docks_available: u16,
+    num_docks_available: IntyBaseType,
     #[serde(skip)]
-    num_docks_disabled: u16,
+    num_docks_disabled: IntyBaseType,
     #[serde(skip)]
     is_installed: u32,
-    num_bikes_disabled: u16,
+    num_bikes_disabled: IntyBaseType,
     station_id: String,
-    station_status: String,
+    station_status: Option<String>,
     #[serde(skip)]
     is_renting: u32,
 }
@@ -55,23 +57,28 @@ struct StationStatus {
     ttl: u32,
 }
 
+type IntyType = Int32Type;
+
+type TimestampType = TimestampSecondType;
+
+#[derive(Debug)]
 struct Builders {
-    id: u16,
-    times: PrimitiveBuilder<TimestampMillisecondType>,
-    station_ids: PrimitiveBuilder<UInt16Type>,
-    num_bikes_available: PrimitiveBuilder<UInt16Type>,
-    num_ebikes_available: PrimitiveBuilder<UInt16Type>,
-    num_bikes_disabled: PrimitiveBuilder<UInt16Type>,
-    num_docks_available: PrimitiveBuilder<UInt16Type>,
+    id: IntyBaseType,
+    times: PrimitiveBuilder<TimestampType>,
+    station_ids: PrimitiveBuilder<IntyType>,
+    num_bikes_available: PrimitiveBuilder<IntyType>,
+    num_ebikes_available: PrimitiveBuilder<IntyType>,
+    num_bikes_disabled: PrimitiveBuilder<IntyType>,
+    num_docks_available: PrimitiveBuilder<IntyType>,
 }
 
-fn get_builders(id: u16) -> Builders {
-    let mut times = PrimitiveBuilder::<TimestampMillisecondType>::new();
-    let mut station_ids = PrimitiveBuilder::<UInt16Type>::new();
-    let mut num_bikes_available = PrimitiveBuilder::<UInt16Type>::new();
-    let mut num_ebikes_available = PrimitiveBuilder::<UInt16Type>::new();
-    let mut num_bikes_disabled = PrimitiveBuilder::<UInt16Type>::new();
-    let mut num_docks_available = PrimitiveBuilder::<UInt16Type>::new();
+fn get_builders(id: IntyBaseType) -> Builders {
+    let times = PrimitiveBuilder::<TimestampType>::new();
+    let station_ids = PrimitiveBuilder::<IntyType>::new();
+    let num_bikes_available = PrimitiveBuilder::<IntyType>::new();
+    let num_ebikes_available = PrimitiveBuilder::<IntyType>::new();
+    let num_bikes_disabled = PrimitiveBuilder::<IntyType>::new();
+    let num_docks_available = PrimitiveBuilder::<IntyType>::new();
 
     return Builders {
         id,
@@ -85,117 +92,99 @@ fn get_builders(id: u16) -> Builders {
 }
 
 fn main() {
-    /*
-        fs::remove_file("data.duckdb").unwrap();
-        let conn = Connection::open("data.duckdb").unwrap();
-
-        conn.execute(
-            "CREATE TABLE station_status (
-                    station_id VARCHAR,
-                    num_bikes_available INTEGER,
-                    num_ebikes_available INTEGER,
-                    num_bikes_disabled INTEGER,
-                    num_docks_available INTEGER,
-                    time BIGINT
-                )",
-            [],
-        )
-        .unwrap();
-    */
-
-    let mut id_legend: HashMap<String, u16> = HashMap::new();
-    let mut id_counter: u16 = 0;
+    let id_legend: HashMap<String, IntyBaseType> = HashMap::new();
+    let mut id_counter: IntyBaseType = 0;
 
     let mut batches: HashMap<String, Builders> = HashMap::new();
 
-    for entry in glob("./station_status/*.json.gz").expect("Failed to read glob pattern") {
+    let files = glob("./station_status/*.json.gz").expect("Failed to read glob pattern");
+
+    let paths: Vec<Result<PathBuf, GlobError>> = files.collect();
+
+    let bar = ProgressBar::new(paths.len() as u64);
+
+    for entry in paths {
+        let unwrapped_entry = entry.unwrap();
         // println!("Processing {:?}", entry);
-        let input = BufReader::new(File::open(entry.unwrap()).unwrap());
+        let input = BufReader::new(File::open(&unwrapped_entry).unwrap());
         let mut decoder = bufread::GzDecoder::new(input);
-        let status: StationStatus = serde_json::from_reader(&mut decoder).unwrap();
-        let time = NaiveDateTime::from_timestamp_opt(status.last_updated, 0)
-            .unwrap()
-            .with_second(0)
-            .unwrap();
-        let stations: Vec<Station> = status
-            .data
-            .stations
-            .into_iter()
-            .filter(|station| station.station_status == "active")
-            .collect();
+        let status_result: Result<StationStatus, serde_json::Error> =
+            serde_json::from_reader(&mut decoder);
 
-        for station in &stations {
-            let batch = batches
-                .entry(station.station_id.clone().into())
-                .or_insert_with(|| {
-                    // This is partly because PrimitiveBuilder doesn't like strings.
-                    // It would probably be nice to just use strings and let dictionary
-                    // compression do its thing.
-                    id_counter = id_counter + 1;
-                    get_builders(id_counter)
-                });
-            batch.times.append_value(time.timestamp_millis());
-            batch.station_ids.append_value(batch.id);
-            batch
-                .num_bikes_available
-                .append_value(station.num_bikes_available - station.num_ebikes_available);
-            batch
-                .num_bikes_disabled
-                .append_value(station.num_bikes_disabled);
-            batch
-                .num_ebikes_available
-                .append_value(station.num_ebikes_available);
-            batch
-                .num_docks_available
-                .append_value(station.num_docks_available);
+        match status_result {
+            Ok(status) => {
+                let time = NaiveDateTime::from_timestamp_opt(status.last_updated, 0)
+                    .unwrap()
+                    .with_second(0)
+                    .unwrap();
 
-            /*
-                conn.execute(
-                    "INSERT INTO station_status (
-                            station_id,
-                            num_bikes_available,
-                            num_ebikes_available,
-                            num_bikes_disabled,
-                            num_docks_available,
-                            time
-                        ) VALUES (?, ?, ?, ?, ?, ?)",
-                    params![
-                        *station_id,
-                        station.num_bikes_available,
-                        station.num_ebikes_available,
-                        station.num_bikes_disabled,
-                        station.num_docks_available,
-                        time.timestamp_millis(),
-                    ],
-                )
-                .unwrap();
-            */
+                // Only collect hourly
+                let stations: Vec<Station> = status.data.stations.into_iter().collect();
+
+                for station in &stations {
+                    let batch = batches
+                        .entry(station.station_id.clone().into())
+                        .or_insert_with(|| {
+                            // This is partly because PrimitiveBuilder doesn't like strings.
+                            // It would probably be nice to just use strings and let dictionary
+                            // compression do its thing.
+                            id_counter = id_counter + 1;
+                            get_builders(id_counter)
+                        });
+                    batch.times.append_value(time.timestamp_millis());
+                    batch.station_ids.append_value(batch.id);
+                    batch
+                        .num_bikes_available
+                        .append_value(station.num_bikes_available - station.num_ebikes_available);
+                    batch
+                        .num_bikes_disabled
+                        .append_value(station.num_bikes_disabled);
+                    batch
+                        .num_ebikes_available
+                        .append_value(station.num_ebikes_available);
+                    batch
+                        .num_docks_available
+                        .append_value(station.num_docks_available);
+                }
+            }
+            Err(error) => {
+                println!(
+                    "Bad file: {}, error: {}",
+                    unwrapped_entry.to_str().unwrap(),
+                    error
+                );
+            }
         }
+        bar.inc(1);
     }
 
-    let file = File::create(format!("data.parquet")).unwrap();
-    let station_ids = Field::new("station_ids", DataType::UInt16, false);
-    let num_bikes_available = Field::new("num_bikes_available", DataType::UInt16, false);
-    let num_ebikes_available = Field::new("num_ebikes_available", DataType::UInt16, false);
-    let num_docks_available = Field::new("num_docks_available", DataType::UInt16, false);
-    let num_bikes_disabled = Field::new("num_bikes_disabled", DataType::UInt16, false);
-    let times_field = Field::new(
-        "times",
-        DataType::Timestamp(TimeUnit::Millisecond, None),
-        false,
-    );
-    let schema = Schema::new(vec![
-        station_ids,
-        num_bikes_available,
-        num_ebikes_available,
-        num_bikes_disabled,
-        num_docks_available,
-        times_field,
-    ]);
-    let props = WriterProperties::builder();
-    let mut writer = ArrowWriter::try_new(file, schema.into(), props.build().into()).unwrap();
+    let inty_data_type = DataType::Int32;
 
-    for mut builders in batches.into_values() {
+    for (id, mut builders) in batches {
+        let station_ids = Field::new("station_ids", inty_data_type.clone(), false);
+        let num_bikes_available = Field::new("num_bikes_available", inty_data_type.clone(), false);
+        let num_ebikes_available =
+            Field::new("num_ebikes_available", inty_data_type.clone(), false);
+        let num_docks_available = Field::new("num_docks_available", inty_data_type.clone(), false);
+        let num_bikes_disabled = Field::new("num_bikes_disabled", inty_data_type.clone(), false);
+        let times_field = Field::new(
+            "times",
+            DataType::Timestamp(TimeUnit::Millisecond, None),
+            false,
+        );
+        let schema = Schema::new(vec![
+            station_ids,
+            num_bikes_available,
+            num_ebikes_available,
+            num_bikes_disabled,
+            num_docks_available,
+            times_field,
+        ]);
+        let props = WriterProperties::builder()
+            .set_compression(parquet::basic::Compression::SNAPPY)
+            .set_writer_version(parquet::file::properties::WriterVersion::PARQUET_2_0);
+        let file = File::create(format!("./output/station-{id}.parquet")).unwrap();
+        let mut writer = ArrowWriter::try_new(file, schema.into(), Some(props.build())).unwrap();
         let batch = RecordBatch::try_from_iter(vec![
             (
                 "station_ids",
@@ -221,16 +210,12 @@ fn main() {
         ])
         .unwrap();
 
-        // conn.close().unwrap();
-
         writer.write(&batch).expect("Writing batch");
+        // writer must be closed to write footer
+        writer.close().unwrap();
     }
 
-    // writer must be closed to write footer
-    writer.close().unwrap();
-
     let mut file = File::create("id_map.json").unwrap();
-
     let serialized_data = serde_json::to_string(&id_legend).unwrap();
     file.write_all(serialized_data.as_bytes()).unwrap();
 }
