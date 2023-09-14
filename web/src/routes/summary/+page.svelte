@@ -9,8 +9,6 @@
 	import * as d3 from 'd3';
 	import { rule } from '$lib/stores';
 
-	export const ssr = false;
-
 	let el: HTMLDivElement;
 
 	const MANUAL_BUNDLES: duckdb.DuckDBBundles = {
